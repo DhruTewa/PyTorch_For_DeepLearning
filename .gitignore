@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+DeepLearning/
+
+# macOS
+.DS_Store
+
+# Model weights and datasets are too large for git
+*.pt
+*.pth
+*.ckpt
+data/
+
+# Personal learning notes, per global working rules
+docs/concepts.md
