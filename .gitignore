@@ -8,7 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-DeepLearning/
 
 # macOS
 .DS_Store
