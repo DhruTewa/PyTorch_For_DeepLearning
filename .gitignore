@@ -17,6 +17,10 @@ wheels/
 *.pth
 *.ckpt
 data/
+EMNIST_data/
 
 # Personal learning notes, per global working rules
 docs/concepts.md
+
+#data
+
