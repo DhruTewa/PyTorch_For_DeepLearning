@@ -18,9 +18,17 @@ wheels/
 *.ckpt
 data/
 EMNIST_data/
-
+Course-1/Course1-pdf/
 # Personal learning notes, per global working rules
 docs/concepts.md
 
 #data
-
+flower_data/
+Course-1/flower_data/
+"Course-1/.\\flower_data/"
+plants_data/
+Course-1/plants_data/
+"Course-1/.\\plants_data/"
+plants_dataset/
+Course-1/plants_dataset/
+"Course-1/.\\plants_dataset/"

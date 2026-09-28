@@ -5,9 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "directory-tree>=1.0.0",
+    "displaytree>=1.1.0",
+    "fastai>=2.8.12",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
     "pandas>=3.0.6",
+    "requests>=2.34.2",
+    "scipy>=1.18.1",
     "torch>=2.14.0",
     "torchvision>=0.29.0",
+    "tqdm>=4.70.1",
 ]

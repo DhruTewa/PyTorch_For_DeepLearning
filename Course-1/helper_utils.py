@@ -1126,3 +1126,284 @@ def plot_metrics(train_loss, test_acc):
     plt.tight_layout()
     plt.show()
     
+    
+import os
+import sys
+
+import matplotlib.pyplot as plt
+from directory_tree import DisplayTree
+from fastai.vision.all import show_image, show_titled_image
+from tqdm.auto import tqdm
+
+
+def get_dataloader_bar(dataloader, color="green"):
+    """
+    Creates and configures a progress bar for a given dataloader.
+
+    Args:
+        dataloader (torch.utils.data.DataLoader): The dataloader providing the dataset.
+        color (str): The color of the progress bar.
+
+    Returns:
+        pbar (tqdm.tqdm): The configured progress bar object.
+    """
+    # Get the total number of samples from the dataloader's dataset.
+    num_samples = len(dataloader.dataset)
+
+    # Initialize a tqdm progress bar with specified settings.
+    pbar = tqdm(
+        # Set the total number of iterations for the bar.
+        total=num_samples,
+        # Dynamically calculate the width of the progress bar.
+        ncols=int(num_samples / 10) + 300,
+        # Define the format string for the progress bar's appearance.
+        bar_format="{desc} {bar} {postfix}",
+        # Direct the progress bar output to the standard output stream.
+        file=sys.stdout,
+        # Set the color of the progress bar.
+        colour=color,
+    )
+
+    # Return the configured progress bar object.
+    return pbar
+
+
+
+def update_dataloader_bar(p_bar, batch, current_bs, n_samples):
+    """
+    Updates the existing progress bar with the current batch information.
+
+    Args:
+        p_bar (tqdm.tqdm): The progress bar object to update.
+        batch (int): The current batch index.
+        current_bs (int): The size of the current batch.
+        n_samples (int): The total number of samples in the dataset.
+    """
+    # Advance the progress bar by the number of items in the current batch.
+    p_bar.update(current_bs)
+    # Set the description to show the current batch number.
+    p_bar.set_description(f"Batch {batch+1}")
+
+    # Check if the current batch is the last one.
+    if (batch + 1) * current_bs > n_samples:
+        # Update the postfix to show the total number of samples processed.
+        p_bar.set_postfix_str(f"{n_samples} of a total of  {n_samples} samples")
+    else:
+        # Update the postfix to show the cumulative number of samples processed.
+        p_bar.set_postfix_str(
+            f"{current_bs*(batch+1)} of a total of  {n_samples} samples"
+        )
+
+
+
+def get_grid(num_rows, num_cols, figsize=(16, 8)):
+    """
+    Creates a grid of subplots and ensures the axes object is consistently formatted.
+
+    Args:
+        num_rows (int): The number of rows in the subplot grid.
+        num_cols (int): The number of columns in the subplot grid.
+        figsize (tuple): The dimensions of the overall figure.
+
+    Returns:
+        fig (matplotlib.figure.Figure): The generated matplotlib figure object.
+        axes (list): The formatted axes grid, structured as an iterable or 2D list.
+    """
+    # Create a figure and a set of subplots.
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+
+    # Handle the case where there is only one row.
+    if num_rows == 1:
+        # Ensure the axes object is iterable for consistency.
+        axes = [axes]
+    # Handle the case where there is only one column.
+    elif num_cols == 1:
+        # Ensure the axes object is a 2D list for consistent indexing.
+        axes = [[ax] for ax in axes]
+        
+    # Return the figure and the formatted axes grid.
+    return fig, axes
+
+
+
+def print_data_folder_structure(root_dir, max_depth=1):
+    """
+    Prints the directory tree structure for a given root directory.
+
+    Args:
+        root_dir (str): The starting path for the directory tree.
+        max_depth (int): The maximum depth for the tree traversal.
+    """
+    # Define the configuration settings for displaying the directory tree.
+    config_tree = {
+        # Specify the starting path for the directory tree.
+        "dirPath": root_dir,
+        # Set to False to include both files and directories.
+        "onlyDirs": False,
+        # Set the maximum depth for the tree traversal.
+        "maxDepth": max_depth,
+        # Specify a sorting option (100 typically means no specific sort).
+        "sortBy": 100,
+    }
+    # Create and display the tree structure using the unpacked configuration.
+    DisplayTree(**config_tree)
+
+
+def explore_extensions(root_dir):
+    """
+    Explores a directory tree to group all file paths by their file extensions.
+
+    Args:
+        root_dir (str): The starting directory path to search.
+
+    Returns:
+        extensions (dict): A dictionary mapping file extensions to a list of matching file paths.
+    """
+    # Initialize a dictionary to store file paths, grouped by extension.
+    extensions = {}
+    # Walk through the directory tree starting from the root directory.
+    for dirpath, _, filenames in os.walk(root_dir):
+        # Iterate over each file in the current directory.
+        for filename in filenames:
+            # Extract the file extension and convert it to lowercase.
+            ext = os.path.splitext(filename)[1].lower()
+            # If the extension has not been seen before, add it to the dictionary.
+            if ext not in extensions:
+                # Initialize a new list for this extension.
+                extensions[ext] = []
+            # Append the full path of the file to the list for its extension.
+            extensions[ext].append(os.path.join(dirpath, filename))
+    # Return the dictionary of extensions and their corresponding file paths.
+    return extensions
+
+
+
+def quick_debug(img):
+    """
+    Prints basic debugging information about an image tensor.
+
+    Args:
+        img (torch.Tensor): The image tensor to inspect.
+    """
+    # Print the shape of the image tensor.
+    print(f"Shape: {img.shape}")  # Should be [3, 224, 224]
+    # Print the data type of the tensor.
+    print(f"Type: {img.dtype}")  # Should be torch.float32
+    # Print the minimum and maximum pixel values in the tensor.
+    print(
+        f"Range of pixel values: [{img.min():.1f}, {img.max():.1f}]"
+    )
+    
+    
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+from directory_tree import DisplayTree
+from fastai.vision.core import show_image, show_titled_image
+from torchvision import transforms
+
+
+class Denormalize:
+    def __init__(self, mean, std):
+
+        new_mean = [-m / s for m, s in zip(mean, std)]
+        new_std = [1 / s for s in std]
+
+        self.denormalize = transforms.Normalize(mean=new_mean, std=new_std)
+
+    def __call__(self, tensor):
+        return self.denormalize(tensor)
+
+
+def plot_img(img, label=None, info=None, ax=None):
+
+    def add_info_text(ax, info):
+        ax.text(
+            0.5, -0.1, info, transform=ax.transAxes, ha="center", va="top", fontsize=10
+        )
+        ax.xaxis.set_label_position("top")
+
+    # using show_image from fastai to handle different image types
+    created_fig = ax is None
+    if created_fig:
+        fig, ax = plt.subplots(figsize=(5, 5))
+
+    if label:
+        title = f"Label: {label}"
+        show_titled_image((img, title), ax=ax)
+    else:
+        show_image(img, ax=ax)
+
+    if info:
+        # Add info as text below the image
+        add_info_text(ax, info)
+
+    if created_fig:
+        plt.show()
+
+
+def get_grid(num_rows, num_cols, figsize=(16, 8)):
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    if num_rows == 1:
+        axes = [axes]  # Ensure axes is iterable
+    elif num_cols == 1:
+        axes = [[ax] for ax in axes]  # Ensure 2D list
+    return fig, axes
+
+
+def print_data_folder_structure(root_dir, max_depth=1):
+    """Print the folder structure of the dataset directory."""
+    config_tree = {
+        "dirPath": root_dir,
+        "onlyDirs": False,
+        "maxDepth": max_depth,
+        "sortBy": 1,  # Sort by type (files first, then folders)
+    }
+    DisplayTree(**config_tree)
+
+
+def explore_extensions(root_dir):
+    """Explore and print the file extensions in the dataset directory."""
+    extensions = {}
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in extensions:
+                extensions[ext] = []
+            extensions[ext].append(os.path.join(dirpath, filename))
+    return extensions
+
+
+def visual_exploration(dataset, num_rows=2, num_cols=4):
+    """Visual exploration of the dataset by displaying random samples in a grid."""
+    # Calculate total number of samples to display
+    total_samples = num_rows * num_cols
+
+    # Randomly select indices from the dataset without replacement
+    # This ensures we get a diverse sample of the dataset
+    indices = np.random.choice(len(dataset), total_samples, replace=False)
+
+    # Create a grid of subplots with appropriate figure size
+    # Each subplot gets (3 x 4) inches per image for good visibility
+    fig, axes = get_grid(num_rows, num_cols, figsize=(num_cols * 3, num_rows * 4))
+
+    # Iterate through each axis and corresponding random index
+    for ax, idx in zip(axes.flatten(), indices):
+        # Load image and label from dataset at the random index
+        image, label = dataset[idx]
+
+        # Get human-readable description for the label
+        description = dataset.get_label_description(label)
+
+        # Create a combined label string with both number and description
+        label = f"{label} - {description}"
+
+        # Create info string showing index and image dimensions
+        info = f"Index: {idx} Size: {image.size}"
+
+        # Plot the image on the current axis with label and info
+        plot_img(image, label=label, info=info, ax=ax)
+
+    # Display the complete grid of images
+    plt.show()
