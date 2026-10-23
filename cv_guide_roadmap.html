@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Computer Vision Project Route: Interactive Map</title>
+<style>
+  :root {
+    --bg: #fdfbf0; --paper: #ffffff; --ink: #17181a; --ink-soft: #45443f; --muted: #726f63;
+    --line: #1a1a1a; --line-soft: #ddd8c6;
+    --blue:   #bcd9f5; --blue-b:   #2f6fb0; --blue-ink:   #163f6b;
+    --green:  #c3e8c7; --green-b:  #3f8f52; --green-ink:  #1f4d2b;
+    --purple: #ddc9f2; --purple-b: #8451c9; --purple-ink: #4a2a75;
+    --amber:  #ffdca3; --amber-b:  #c98a12; --amber-ink:  #7a4e05;
+    --pink:   #f7c9dc; --pink-b:   #c94d80; --pink-ink:   #7a1f42;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .page { padding: 44px 20px 220px; }
+  .wrap { max-width: 1520px; margin: 0 auto; }
+
+  .hero { max-width: 900px; margin: 0 0 26px; }
+  .eyebrow { font-size: .78rem; letter-spacing: .1em; color: var(--blue-b); text-transform: uppercase; font-weight: 750; margin: 0 0 10px; }
+  h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.01em; margin: 0 0 12px; }
+  .sub { font-size: 1.08rem; color: var(--ink-soft); max-width: 68ch; margin: 0; }
+  .sub strong { color: var(--ink); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 20px 0 22px; }
+  .lg { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--ink-soft); font-weight: 650; }
+  .lg .dot { width: 12px; height: 12px; border-radius: 4px; background: var(--fill); border: 1.6px solid var(--accent); }
+  .lg[data-group="s1"] { --fill: var(--blue);   --accent: var(--blue-b); }
+  .lg[data-group="pre"] { --fill: var(--purple); --accent: var(--purple-b); }
+  .lg[data-group="s2"] { --fill: var(--green);  --accent: var(--green-b); }
+  .lg[data-group="ft"] { --fill: var(--amber);  --accent: var(--amber-b); }
+  .lg[data-group="s3"] { --fill: var(--pink);   --accent: var(--pink-b); }
+
+  .notes { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .devnote { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--amber-ink); background: var(--amber); border: 1.6px solid var(--amber-b); border-radius: 999px; padding: 7px 14px; }
+
+  .flow-control { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; background: var(--paper); border: 1.8px solid var(--line); border-radius: 999px; padding: 10px 10px 10px 20px; margin-bottom: 26px; max-width: 100%; }
+  #playFlowBtn { font-family: inherit; font-size: .95rem; font-weight: 750; color: var(--paper); background: var(--ink); border: none; border-radius: 999px; padding: 10px 20px; cursor: pointer; flex: none; transition: transform .15s ease, opacity .2s ease; }
+  #playFlowBtn:hover { transform: translateY(-1px); }
+  #playFlowBtn:disabled { opacity: .55; cursor: default; transform: none; }
+  .flow-status { font-size: .92rem; color: var(--ink-soft); margin: 0; flex: 1 1 260px; }
+  .flow-dot { position: fixed; width: 15px; height: 15px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 4px rgba(0,0,0,.10), 0 0 16px 3px rgba(0,0,0,.28); pointer-events: none; z-index: 300; transform: translate(-50%, -50%); }
+  .flow-dot[hidden] { display: none; }
+  @keyframes flowPulse { 0%, 100% { box-shadow: 0 0 0 3px var(--accent); } 50% { box-shadow: 0 0 0 6px var(--accent), 0 0 26px 6px var(--accent); } }
+  .flow-lit { animation: flowPulse 1s ease-in-out 2; }
+
+  .zone { position: relative; border: 2px dashed var(--accent); background: var(--tint); border-radius: 20px; padding: 28px 24px 24px; transition: filter .3s ease, opacity .3s ease; }
+  .zone[data-group="s1"] { --accent: var(--blue-b);  --tint: #eef6fd; }
+  .zone[data-group="s2"] { --accent: var(--green-b); --tint: #eef9f0; }
+  .zone[data-group="s3"] { --accent: var(--pink-b);  --tint: #fdf0f6; }
+  .zone-label { display: block; font-weight: 800; font-size: 1.02rem; color: var(--accent); margin: 0 0 18px; }
+  .zone.dimmed { filter: none; opacity: 1; --accent: #b6b1a0; --tint: #f2f0e6; }
+  .card-row { display: grid; grid-template-columns: repeat(3, 248px); gap: 16px; justify-content: center; align-items: stretch; }
+
+  .map-wrap { margin-bottom: 6px; }
+  .map-fit { overflow: auto; }
+  #map { display: flex; align-items: flex-start; gap: 18px; width: max-content; padding: 4px; transform-origin: top left; }
+  #map .zone { flex: none; margin-bottom: 0; }
+  #map .h-connector { flex: none; align-self: center; }
+  #map .h-connector-branch { flex: none; align-self: center; }
+  #map .zone[data-group="s3"] { align-self: center; }
+
+  .zoom-controls { display: flex; align-items: center; gap: 3px; flex: none; background: var(--bg); border: 1.6px solid var(--line-soft); border-radius: 999px; padding: 4px; }
+  .zoom-controls button { font-family: inherit; font-weight: 780; color: var(--ink); background: transparent; border: none; border-radius: 999px; cursor: pointer; line-height: 1; }
+  .zoom-controls button:hover { background: #ece8d8; }
+  .zoom-controls .zbtn { width: 30px; height: 30px; font-size: 1.1rem; }
+  .zoom-controls #zoomResetBtn { padding: 0 12px; height: 30px; font-size: .8rem; font-weight: 750; }
+
+  .h-connector-branch { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .h-connector-line { display: flex; align-items: center; width: 64px; }
+  .h-connector-line .stem { height: 2px; flex: 1; background: var(--line); }
+
+  .stepcard { --fill: var(--blue); --accent: var(--blue-b); display: flex; flex-direction: column; min-width: 0; height: 100%; background: var(--fill); border: 1.8px solid var(--line); border-radius: var(--radius); padding: 20px 20px 18px; cursor: pointer; text-align: left; position: relative; font-family: inherit; transition: transform .2s ease, box-shadow .25s ease, filter .3s ease, opacity .3s ease; }
+  .stepcard[data-group="s1"] { --fill: var(--blue);  --accent: var(--blue-b); }
+  .stepcard[data-group="s2"] { --fill: var(--green); --accent: var(--green-b); }
+  .stepcard:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(0,0,0,.14), 0 0 0 2px var(--accent); }
+  .stepcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .stepcard-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .stepnum { width: 32px; height: 32px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: .92rem; color: var(--ink); background: #fff; border: 1.8px solid var(--line); }
+  .stepicon { font-size: 1.5rem; }
+  .stepcard h3 { font-size: 1.32rem; font-weight: 780; margin: 0 0 10px; color: var(--ink); letter-spacing: -0.005em; }
+  .stepcard p { font-size: 1.2rem; line-height: 1.62; color: var(--ink-soft); margin: 0 0 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+  .chip { font-size: .9rem; font-weight: 750; color: var(--ink); background: #fff; border: 1.6px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+  .explore { font-size: 1.02rem; font-weight: 750; color: var(--accent); display: inline-flex; align-items: center; gap: 4px; margin-top: auto; }
+  .explore .arrow { transition: transform .2s ease; }
+  .stepcard:hover .explore .arrow { transform: translateX(3px); }
+
+  .dimmed { filter: grayscale(1) opacity(.45); }
+  [data-step].spot { box-shadow: 0 0 0 3px var(--accent), 0 8px 20px rgba(0,0,0,.16); transform: translateY(-2px); }
+
+  .flow-arrow { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 14px 0; }
+  .flow-arrow .stem { width: 2px; height: 20px; background: var(--line); }
+  .arrowhead-down { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--line); margin-top: -1px; }
+  .arrowhead-right { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 9px solid var(--line); flex: none; }
+
+  .hub { width: 776px; border: 1.8px solid var(--line); border-radius: 14px; background: var(--fill); padding: 18px 24px; text-align: center; transition: filter .3s ease, opacity .3s ease; }
+  .hub[data-group="s1"] { --fill: var(--blue);  --accent: var(--blue-b); }
+  .hub[data-group="s2"] { --fill: var(--green); --accent: var(--green-b); }
+  .hub-title { display: block; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em; }
+  .hub-sub { display: block; font-size: 1.15rem; color: var(--ink-soft); margin-top: 6px; }
+
+  .h-connector { display: flex; align-items: center; gap: 8px; padding: 8px 0; height: 100%; }
+  .h-connector .stem { height: 2px; flex: 1; min-width: 14px; background: var(--line); }
+  .h-connector-label { font-size: 1.15rem; font-weight: 700; color: var(--ink-soft); text-align: center; line-height: 1.3; flex: none; white-space: nowrap; }
+
+  .conn-pill { --fill: var(--purple); --accent: var(--purple-b); display: inline-flex; align-items: center; gap: 12px; padding: 12px 22px; border-radius: 999px; cursor: pointer; background: var(--fill); border: 1.8px solid var(--line); font-family: inherit; transition: transform .2s ease, box-shadow .25s ease, filter .3s ease, opacity .3s ease; }
+  .conn-pill[data-group="pre"] { --fill: var(--purple); --accent: var(--purple-b); }
+  .conn-pill[data-group="ft"] { --fill: var(--amber);  --accent: var(--amber-b); }
+  .conn-pill:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,.14), 0 0 0 2px var(--accent); }
+  .conn-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .conn-pill .stepicon { font-size: 1.3rem; }
+  .conn-pill .conn-text { text-align: left; }
+  .conn-pill .conn-title { display: block; font-weight: 780; font-size: 1.12rem; color: var(--ink); }
+  .conn-pill .conn-sub { display: block; font-size: 1.05rem; color: var(--ink-soft); }
+
+  .branch { display: flex; flex-direction: column; gap: 26px; margin-top: 4px; }
+  .branch-col { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 320px; }
+  .branch-col .stem { width: 2px; height: 20px; background: var(--line); }
+  .data-caption { font-size: 1.06rem; font-weight: 650; color: var(--ink); text-align: center; padding: 0 6px; }
+  .outputcard { --fill: var(--pink); --accent: var(--pink-b); width: 100%; background: var(--fill); border: 1.8px solid var(--line); border-radius: var(--radius); padding: 22px 22px 20px; text-align: center; position: relative; transition: filter .3s ease, opacity .3s ease; }
+  .outputcard .badge { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 750; letter-spacing: .02em; color: var(--accent); background: #fff; border: 1.6px solid var(--accent); border-radius: 999px; padding: 4px 12px; margin-bottom: 12px; }
+  .outputcard h3 { font-size: 1.38rem; font-weight: 800; margin: 0 0 8px; }
+  .outputcard p { font-size: 1.12rem; color: var(--ink-soft); margin: 0; }
+
+  .checklist { position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 300px; max-height: 60vh; display: flex; flex-direction: column; background: var(--paper); border: 1.8px solid var(--line); border-radius: 16px; box-shadow: 0 14px 36px rgba(0,0,0,.16); }
+  .checklist-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1.6px solid var(--line-soft); }
+  .checklist-head span { font-weight: 780; font-size: .95rem; }
+  .checklist-head .btns { display: flex; gap: 8px; }
+  .checklist-head button { font-family: inherit; font-size: .78rem; font-weight: 750; color: var(--ink-soft); background: transparent; border: 1.6px solid var(--line-soft); border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+  .checklist-head button:hover { color: var(--ink); border-color: var(--ink); }
+  .checklist-items { overflow-y: auto; padding: 10px 8px; }
+  .chk-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 10px; cursor: pointer; font-size: .92rem; }
+  .chk-row:hover { background: #f6f3e6; }
+  .chk-row input { width: 16px; height: 16px; accent-color: var(--ink); flex: none; }
+  .chk-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; border: 1.6px solid var(--line); }
+  .chk-row .chk-num { color: var(--muted); font-size: .78rem; }
+  .chk-stage { background: #f6f3e6; margin: 6px 0 2px; }
+  .chk-stage:first-child { margin-top: 0; }
+  .chk-stage .chk-label { font-weight: 780; }
+  .chk-stage .chk-dot { width: 12px; height: 12px; }
+  .checklist.collapsed .checklist-items { display: none; }
+
+  .deepdive { position: fixed; inset: 0; z-index: 200; overflow-y: auto; background: var(--bg); padding: 40px 20px 100px; }
+  .deepdive[hidden] { display: none; }
+  .dd-wrap { max-width: 900px; margin: 0 auto; }
+  .back { font-family: inherit; font-size: .92rem; font-weight: 750; color: var(--ink-soft); background: var(--paper); border: 1.6px solid var(--line); border-radius: 10px; padding: 8px 16px; cursor: pointer; margin-bottom: 28px; }
+  .back:hover { color: var(--ink); background: #f6f3e6; }
+  .dd-tag { display: inline-block; font-size: .78rem; letter-spacing: .06em; font-weight: 750; text-transform: uppercase; color: var(--ink); background: var(--fill); border: 1.6px solid var(--accent); border-radius: 999px; padding: 5px 14px; margin-bottom: 16px; }
+  .dd-wrap h2 { font-size: clamp(26px, 3.4vw, 36px); font-weight: 800; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .dd-lede { font-size: 1.1rem; color: var(--ink-soft); line-height: 1.65; max-width: 74ch; margin: 0 0 28px; }
+  .dd-jumpnav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 30px; font-size: .95rem; }
+  .dd-jumpnav a { color: var(--blue-b); font-weight: 700; text-decoration: none; }
+  .dd-jumpnav a:hover { text-decoration: underline; }
+
+  .dd-section { margin: 0 0 46px; padding-top: 32px; border-top: 2px dashed var(--line-soft); scroll-margin-top: 24px; }
+  .dd-section:first-of-type { border-top: none; padding-top: 0; }
+  .dd-section-head { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
+  .dd-section-num { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--fill); border: 1.8px solid var(--line); font-weight: 800; font-size: 1.15rem; }
+  .dd-section-title { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.01em; }
+  .dd-section-intro { font-size: 1.08rem; color: var(--ink-soft); line-height: 1.62; max-width: 74ch; margin: 0 0 18px; }
+  .dd-bullets { margin: 0 0 18px; padding-left: 24px; max-width: 74ch; }
+  .dd-bullets li { font-size: 1.05rem; color: var(--ink-soft); line-height: 1.55; margin-bottom: 8px; }
+  .dd-bullets b, .dd-section-intro b { color: var(--ink); }
+  code { background: #f0eee0; border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 6px; font-size: .94em; color: var(--ink); }
+
+  .dd-visual { background: var(--paper); border: 1.8px solid var(--line); border-radius: 16px; padding: 24px; overflow-x: auto; margin: 0 0 18px; }
+  .dd-visual .cap { font-size: .92rem; color: var(--muted); margin: 14px 0 0; }
+  .ch-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 0 0 6px; }
+  .ch-card { display: block; text-decoration: none; color: var(--ink); background: var(--paper); border: 1.8px solid var(--line); border-radius: 12px; padding: 14px 16px; transition: transform .15s ease, box-shadow .2s ease; }
+  .ch-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12), 0 0 0 2px var(--accent); }
+  .ch-card .n { font-size: .8rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .ch-card .t { display: block; font-size: 1.1rem; font-weight: 780; margin: 2px 0 4px; }
+  .ch-card .d { display: block; font-size: .98rem; color: var(--ink-soft); line-height: 1.45; }
+  .ch-card .tagline { display: inline-block; margin-top: 8px; font-size: .74rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 2px 9px; border: 1.6px solid var(--line); background: var(--fill); }
+
+  .dd-callout { border-left: 4px solid var(--accent); background: var(--tint); border-radius: 0 12px 12px 0; padding: 14px 18px; font-size: 1.02rem; margin: 0 0 14px; max-width: 74ch; line-height: 1.55; }
+  .dd-callout.warn { --accent: var(--amber-b); --tint: #fff6e3; }
+
+  .strip { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
+  .strip .box { flex: 1 1 130px; min-width: 120px; background: var(--fill, #fff); border: 1.8px solid var(--line); border-radius: 12px; padding: 12px 14px; text-align: center; font-weight: 700; font-size: 1rem; }
+  .strip .box small { display: block; font-weight: 500; font-size: .85rem; color: var(--ink-soft); margin-top: 3px; }
+  .strip .arrowhead-right { align-self: center; }
+  .splitbar { display: flex; height: 54px; border: 1.8px solid var(--line); border-radius: 12px; overflow: hidden; font-weight: 750; }
+  .splitbar div { display: flex; align-items: center; justify-content: center; }
+  pre.tree { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .98rem; line-height: 1.55; color: var(--ink); white-space: pre; }
+  table.dd { border-collapse: collapse; width: 100%; font-size: 1rem; }
+  table.dd th { text-align: left; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 12px; border-bottom: 1.8px solid var(--line); }
+  table.dd td { padding: 11px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; color: var(--ink-soft); }
+  table.dd td:first-child { font-weight: 700; color: var(--ink); }
+  .cm { display: grid; grid-template-columns: auto repeat(3, 76px); gap: 6px; align-items: center; justify-content: start; font-size: .92rem; }
+  .cm .h { font-weight: 750; color: var(--ink-soft); text-align: center; }
+  .cm .r { font-weight: 750; color: var(--ink-soft); padding-right: 8px; }
+  .cm .c { height: 62px; border: 1.8px solid var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 750; font-size: .85rem; text-align: center; }
+  .cm .ok { background: var(--green); } .cm .bad { background: #fff; color: var(--muted); } .cm .conf { background: var(--pink); }
+
+  @media (max-width: 640px) {
+    .checklist { width: calc(100% - 24px); right: 12px; bottom: 12px; max-height: 45vh; }
+    .page { padding-bottom: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">Computer Vision Pocket Guide · Interactive Map</p>
+      <h1>The Computer Vision Project Route</h1>
+      <p class="sub">From a folder of images to a model running in production. <strong>Click any step</strong> to see which chapters to read and what to watch for, use the checklist to spotlight steps, or press play to watch the whole route.</p>
+    </header>
+
+    <div class="legend">
+      <span class="lg" data-group="s1"><span class="dot"></span>Stage 1 · Before you train</span>
+      <span class="lg" data-group="pre"><span class="dot"></span>Training</span>
+      <span class="lg" data-group="s2"><span class="dot"></span>Stage 2 · Evaluate and improve</span>
+      <span class="lg" data-group="ft"><span class="dot"></span>Shipping (only if it goes to production)</span>
+      <span class="lg" data-group="s3"><span class="dot"></span>Stage 3 · Production</span>
+    </div>
+
+    <div class="notes">
+      <div class="devnote">🧭 Not plain image classification (finding objects, outlining regions, reading text, generating images)? Start with Chapter 17.</div>
+      <div class="devnote">🔎 Task is "find similar images"? Side track: Chapter 11.</div>
+    </div>
+
+    <div class="flow-control">
+      <button id="playFlowBtn" type="button">▶ Play the project route</button>
+      <p class="flow-status" id="flowStatus">Watch a project move from raw images to a monitored model in production.</p>
+      <div class="zoom-controls">
+        <button type="button" class="zbtn" id="zoomOutBtn" aria-label="Zoom out">−</button>
+        <button type="button" id="zoomResetBtn">Fit</button>
+        <button type="button" class="zbtn" id="zoomInBtn" aria-label="Zoom in">+</button>
+      </div>
+    </div>
+
+    <div class="map-wrap">
+      <div class="map-fit" id="mapFit">
+      <main id="map">
+      <section class="zone" data-group="s1">
+        <span class="zone-label">STAGE 1 · BEFORE YOU TRAIN</span>
+        <div class="card-row" id="row-s1"></div>
+        <div class="flow-arrow"><span class="stem"></span><span class="arrowhead-down"></span></div>
+        <div class="hub" data-group="s1">
+          <span class="hub-title">Ready to train</span>
+          <span class="hub-sub">A tidy project, clean and honestly split data, and a pretrained model chosen to start from.</span>
+        </div>
+      </section>
+
+      <div class="h-connector">
+        <span class="stem"></span>
+        <div id="connector-4"></div>
+        <span class="stem"></span>
+        <span class="arrowhead-right" style="border-left-color:var(--purple-b)"></span>
+      </div>
+
+      <section class="zone" data-group="s2">
+        <span class="zone-label">STAGE 2 · EVALUATE AND IMPROVE</span>
+        <div class="card-row" id="row-s2"></div>
+        <div class="flow-arrow"><span class="stem"></span><span class="arrowhead-down"></span></div>
+        <div class="hub" data-group="s2">
+          <span class="hub-title">A model you can trust</span>
+          <span class="hub-sub">Measured honestly, checked for the right reasons, and good enough for the job. Loop back to data or training as often as needed.</span>
+        </div>
+      </section>
+
+      <div class="h-connector-branch">
+        <div class="h-connector-line"><span class="stem"></span><span class="arrowhead-right" style="border-left-color:var(--amber-b)"></span></div>
+        <span class="h-connector-label">only if it<br>goes to production</span>
+        <div class="h-connector-line"><span class="stem"></span><span class="arrowhead-right" style="border-left-color:var(--amber-b)"></span></div>
+      </div>
+
+      <section class="zone" data-group="s3">
+        <span class="zone-label">STAGE 3 · PRODUCTION</span>
+        <div class="branch">
+          <div class="branch-col">
+            <span class="data-caption">Size or speed limit ↓</span>
+            <div id="branch-8"></div>
+            <span class="stem"></span>
+            <div class="outputcard">
+              <span class="badge">✓ Ready to serve</span>
+              <h3>Deployable model</h3>
+              <p>Small and fast enough, bundled with its preprocessing, exported and behind an API.</p>
+            </div>
+          </div>
+          <div class="branch-col">
+            <div id="branch-9"></div>
+            <span class="stem"></span>
+            <div class="outputcard">
+              <span class="badge">✓ Running safely</span>
+              <h3>Production system</h3>
+              <p>Tested on every change, installable, and watched for drift once real users arrive.</p>
+            </div>
+            <span class="data-caption">↑ Repeatable and watched</span>
+          </div>
+        </div>
+      </section>
+    </main>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-dot" id="flowDot" hidden></div>
+
+<aside class="checklist" id="checklist">
+  <div class="checklist-head">
+    <span>Highlight steps</span>
+    <div class="btns">
+      <button type="button" id="clearBtn">Clear</button>
+      <button type="button" id="collapseBtn" aria-label="Collapse checklist">–</button>
+    </div>
+  </div>
+  <div class="checklist-items" id="checklist-items"></div>
+</aside>
+
+<div class="deepdive" id="deepdive" hidden>
+  <div class="dd-wrap">
+    <button class="back" id="backBtn">‹ Back to map</button>
+    <div id="dd-inner"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const STEPS = [
+    { num: 1, group: "s1", kind: "card", icon: "🧰", title: "Set up", chapters: "Ch 0 · Ch 1",
+      desc: "Folders, settings, seeds and logging, plus the five-step recipe behind every network." },
+    { num: 2, group: "s1", kind: "card", icon: "🗂️", title: "Data", chapters: "Ch 2 · Ch 3",
+      desc: "Look at the images, check quality, split without leakage, then build transforms and loaders. Most failed projects fail here." },
+    { num: 3, group: "s1", kind: "card", icon: "🧠", title: "Choose a model", chapters: "Ch 5 · Ch 18 · Ch 4",
+      desc: "Start from a pretrained network. Design your own only for tiny or unusual images." },
+    { num: 4, group: "pre", kind: "pill", icon: "⚡", title: "Train", chapters: "Ch 6 · Ch 7",
+      desc: "Train and validate each epoch, save the best model, and run sanity checks before any long run." },
+    { num: 5, group: "s2", kind: "card", icon: "📊", title: "Evaluate", chapters: "Ch 10",
+      desc: "Go beyond accuracy: per-class results, a look at the worst mistakes, calibration, and how much to trust a score." },
+    { num: 6, group: "s2", kind: "card", icon: "🔧", title: "Improve", chapters: "Ch 8 · Ch 12",
+      desc: "Fix overfitting or underfitting, and check that the model looks at the right thing." },
+    { num: 7, group: "s2", kind: "card", icon: "🎛️", title: "Tune", chapters: "Ch 9",
+      desc: "Automated search, last. Only once a plain baseline works." },
+    { num: 8, group: "ft", kind: "pill", icon: "📦", title: "Shrink and serve", chapters: "Ch 13 · Ch 14",
+      desc: "Make it small and fast enough, then bundle, export and serve it." },
+    { num: 9, group: "ft", kind: "pill", icon: "🛡️", title: "Test and monitor", chapters: "Ch 15 · Ch 16",
+      desc: "Automated tests, an installable package, and drift watching after launch." },
+  ];
+
+  const GROUP_LABEL = {
+    s1: "Stage 1 · Before you train", pre: "Training",
+    s2: "Stage 2 · Evaluate and improve", ft: "Shipping (only if it goes to production)",
+  };
+  const GROUP_VARS = {
+    s1:  { fill: "--blue",   accent: "--blue-b" },
+    pre: { fill: "--purple", accent: "--purple-b" },
+    s2:  { fill: "--green",  accent: "--green-b" },
+    ft:  { fill: "--amber",  accent: "--amber-b" },
+  };
+  const STAGE_GROUPS = {
+    s1: { label: "Stage 1 · Before you train", members: [1, 2, 3], fill: "--blue" },
+    s2: { label: "Stage 2 · Evaluate and improve", members: [5, 6, 7], fill: "--green" },
+    s3: { label: "Stage 3 · Production", members: [8, 9], fill: "--pink" },
+  };
+
+  function chipsHTML(s) {
+    return '<div class="chips">' + s.chapters.split(" · ").map(c => '<span class="chip">' + c + '</span>').join("") + '</div>';
+  }
+  function cardHTML(s) {
+    return `
+      <button class="stepcard" type="button" data-step="${s.num}" data-group="${s.group}" aria-haspopup="dialog">
+        <div class="stepcard-head"><span class="stepnum">${s.num}</span><span class="stepicon">${s.icon}</span></div>
+        <h3>${s.title}</h3>
+        ${chipsHTML(s)}
+        <p>${s.desc}</p>
+        <span class="explore">Explore in depth <span class="arrow">→</span></span>
+      </button>`;
+  }
+  function pillHTML(s) {
+    return `
+      <button class="conn-pill" type="button" data-step="${s.num}" data-group="${s.group}" aria-haspopup="dialog">
+        <span class="stepnum">${s.num}</span>
+        <span class="stepicon">${s.icon}</span>
+        <span class="conn-text"><span class="conn-title">${s.title} · ${s.chapters.replace(/ · /g, ", ")}</span><span class="conn-sub">Explore in depth →</span></span>
+      </button>`;
+  }
+
+  const byNum = (n) => STEPS.find(s => s.num === n);
+  document.getElementById("row-s1").innerHTML = STEPS.filter(s => s.group === "s1").map(cardHTML).join("");
+  document.getElementById("row-s2").innerHTML = STEPS.filter(s => s.group === "s2").map(cardHTML).join("");
+  document.getElementById("connector-4").innerHTML = pillHTML(byNum(4));
+  document.getElementById("branch-8").innerHTML = pillHTML(byNum(8));
+  document.getElementById("branch-9").innerHTML = pillHTML(byNum(9));
+
+  /* ---------------- checklist ---------------- */
+  const checklistItems = document.getElementById("checklist-items");
+  function stepRowHTML(s) {
+    return `<label class="chk-row"><input type="checkbox" data-step="${s.num}"><span class="chk-dot" style="background:var(${GROUP_VARS[s.group].fill})"></span><span class="chk-num">${s.num}</span><span class="chk-label">${s.title}</span></label>`;
+  }
+  function stageRowHTML(key) {
+    const g = STAGE_GROUPS[key];
+    return `<label class="chk-row chk-stage"><input type="checkbox" data-stage="${key}"><span class="chk-dot" style="background:var(${g.fill})"></span><span class="chk-label">${g.label}</span></label>`;
+  }
+  checklistItems.innerHTML =
+    stageRowHTML("s1") + [1, 2, 3].map(n => stepRowHTML(byNum(n))).join("") +
+    stepRowHTML(byNum(4)) +
+    stageRowHTML("s2") + [5, 6, 7].map(n => stepRowHTML(byNum(n))).join("") +
+    stageRowHTML("s3") + [8, 9].map(n => stepRowHTML(byNum(n))).join("");
+
+  const stepEls = () => Array.from(document.querySelectorAll("[data-step]"));
+  const COMPLETION_GROUPS = [
+    { requires: [1, 2, 3], els: () => [document.querySelector('.zone[data-group="s1"]'), document.querySelector('.hub[data-group="s1"]')] },
+    { requires: [5, 6, 7], els: () => [document.querySelector('.zone[data-group="s2"]'), document.querySelector('.hub[data-group="s2"]')] },
+    { requires: [8], els: () => [document.querySelectorAll(".outputcard")[0]] },
+    { requires: [9], els: () => [document.querySelectorAll(".outputcard")[1]] },
+    { requires: [8, 9], els: () => [document.querySelector('.zone[data-group="s3"]')] },
+  ];
+  function applyHighlight() {
+    const checked = Array.from(checklistItems.querySelectorAll("input[data-step]:checked")).map(i => Number(i.dataset.step));
+    const anyChecked = checked.length > 0;
+    stepEls().forEach(el => {
+      if (!anyChecked) { el.classList.remove("dimmed", "spot"); return; }
+      const isOn = checked.includes(Number(el.dataset.step));
+      el.classList.toggle("spot", isOn);
+      el.classList.toggle("dimmed", !isOn);
+    });
+    COMPLETION_GROUPS.forEach(g => {
+      const complete = g.requires.every(n => checked.includes(n));
+      g.els().forEach(el => {
+        if (!el) return;
+        if (!anyChecked) { el.classList.remove("dimmed"); return; }
+        el.classList.toggle("dimmed", !complete);
+      });
+    });
+  }
+  function syncStageCheckboxes() {
+    Object.keys(STAGE_GROUPS).forEach(key => {
+      const stageInput = checklistItems.querySelector('input[data-stage="' + key + '"]');
+      const memberInputs = STAGE_GROUPS[key].members.map(n => checklistItems.querySelector('input[data-step="' + n + '"]'));
+      const c = memberInputs.filter(i => i && i.checked).length;
+      stageInput.checked = c === memberInputs.length;
+      stageInput.indeterminate = c > 0 && c < memberInputs.length;
+    });
+  }
+  checklistItems.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.matches("input[data-stage]")) {
+      STAGE_GROUPS[t.dataset.stage].members.forEach(n => {
+        const inp = checklistItems.querySelector('input[data-step="' + n + '"]');
+        if (inp) inp.checked = t.checked;
+      });
+      t.indeterminate = false;
+    } else if (t.matches("input[data-step]")) { syncStageCheckboxes(); }
+    applyHighlight();
+  });
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    checklistItems.querySelectorAll("input").forEach(i => { i.checked = false; i.indeterminate = false; });
+    applyHighlight();
+  });
+  const checklistPanel = document.getElementById("checklist");
+  const collapseBtn = document.getElementById("collapseBtn");
+  collapseBtn.addEventListener("click", () => {
+    const collapsed = checklistPanel.classList.toggle("collapsed");
+    collapseBtn.textContent = collapsed ? "+" : "–";
+    collapseBtn.setAttribute("aria-label", collapsed ? "Expand checklist" : "Collapse checklist");
+  });
+
+  /* ---------------- deep dive content ---------------- */
+  const arrow = '<span class="arrowhead-right"></span>';
+  const G = "guide/";
+
+  const DEEP = {
+    1: {
+      lede: "Before any code that learns, give the project a shape: where files live, where settings live, how to repeat a run, and what the five steps behind every network are. This is quick, and it saves days later.",
+      chapters: [
+        { ch: 0, file: "00_project_skeleton.md", title: "Project skeleton", d: "Folder layout, one settings file, seeds, device and logging, experiment tracking, version control and data.", tag: "Every project" },
+        { ch: 1, file: "01_training_recipe.md", title: "The training recipe", d: "Data, model, loss, optimizer, loop. Read once, then skim.", tag: "Every project" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Create the folder layout</b> and keep big data out of git.",
+          "<b>Put every setting in one place</b> (a config file), not scattered through the code.",
+          "<b>Seed everything</b> so a run can be repeated, and log to a file, not just the screen.",
+          "<b>Learn the five steps</b> once: data, model, loss, optimizer, loop. Every later chapter is a variation on them." ] },
+      ],
+      visual: { title: "A typical layout", html: '<pre class="tree">my_project/\n  configs/        settings, one file per experiment\n  src/            your package (data, models, training code)\n  data/           NOT in git (too big)\n  runs/           logs, checkpoints, saved splits\n  tests/          automated tests\n  pyproject.toml  makes the code installable</pre><p class="cap">An example shape, not a rule. Chapter 0 explains the reasons for each folder.</p>' },
+      warn: "Settings scattered through the code and unseeded runs are the two habits that make results impossible to repeat or compare.",
+      done: "You can re-run an experiment from one command and one settings file and get the same result."
+    },
+    2: {
+      lede: "A model can only learn what the data shows it, and can only be judged fairly if the data it is tested on was kept apart from the start. Spend your first hours here: it is the cheapest place to find problems.",
+      chapters: [
+        { ch: 2, file: "02_data_inspection_splitting.md", title: "Inspect and split", d: "Look at real images, check quality, split honestly.", tag: "Every project" },
+        { ch: 3, file: "03_data_pipeline.md", title: "Transforms, loaders, imbalance", d: "Augmentation, datasets and loaders, rare classes.", tag: "Every project" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Look first:</b> count images per class and view real pictures.",
+          "<b>Check quality:</b> corrupt files, exact duplicates (a hash check finds them), wrong labels.",
+          "<b>Split first, with a seed,</b> into train, validation and test. Keep groups together (all images of one patient, product or scene go to the same split). Touch the test set once, at the end.",
+          "<b>Two transform recipes:</b> random augmentation for training, fixed resizing and normalising for evaluation. Augmentations must keep the label true.",
+          "<b>Imbalanced classes:</b> use class weights or a sampler, and judge by per-class metrics." ] },
+      ],
+      visual: { title: "Split before you learn anything from the data", html: '<div class="splitbar"><div style="flex:70;background:var(--blue)">Train</div><div style="flex:15;background:var(--amber)">Validation</div><div style="flex:15;background:var(--pink)">Test</div></div><p class="cap">An example 70 / 15 / 15 split. Anything computed from data (mean and std, class weights) uses the training part only.</p>' },
+      warn: "A score that looks too good is usually leakage: duplicates or groups spread across splits, or statistics computed on all the data.",
+      done: "You have checked, seeded splits saved to disk, a train and an evaluation transform, and one batch you have actually looked at."
+    },
+    3: {
+      lede: "Start from a pretrained network. It has already learned general visual features, so you need far less data and time. Build from scratch only when your images are unlike everyday photos or you have a very large dataset of your own.",
+      chapters: [
+        { ch: 5, file: "05_transfer_learning.md", title: "Transfer learning", d: "Replace the last layer, decide what to freeze, match the preprocessing.", tag: "Recommended" },
+        { ch: 18, file: "18_modern_backbones.md", title: "Modern backbones", d: "Better pretrained starting points, and a frozen-features baseline.", tag: "Recommended" },
+        { ch: 4, file: "04_models.md", title: "Designing models", d: "Layers, CNN blocks, parameter budgets, efficient designs.", tag: "Only if from scratch" },
+        { ch: 11, file: "11_embeddings.md", title: "Embeddings and visual search", d: "Only when the task is finding similar images.", tag: "Side track" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Pick a pretrained network</b> and replace its last layer with one sized for your classes.",
+          "<b>Decide what to freeze:</b> usually everything except the new last layer. Unfreeze the last block only if accuracy plateaus on a few thousand images.",
+          "<b>Use the preprocessing the weights were trained with</b>, the same in training and in prediction.",
+          "<b>Watch BatchNorm:</b> a frozen backbone still updates its running averages unless you keep those layers in evaluation mode." ] },
+      ],
+      visual: { title: "Which path?", html: '<table class="dd"><tr><th>Your situation</th><th>Start with</th></tr><tr><td>Ordinary photos, small or medium dataset</td><td>Transfer learning (Ch 5), a modern backbone (Ch 18)</td></tr><tr><td>Tiny or unusual images (one channel, spectrograms) or a huge dataset of your own</td><td>Design from scratch (Ch 4)</td></tr><tr><td>Find similar images, not name them</td><td>Embeddings (Ch 11)</td></tr></table>' },
+      warn: "Forgetting to replace the last layer, or using different preprocessing in training and prediction, gives a model that looks fine and performs badly in real use.",
+      done: "A model whose output has your number of classes, with a clear record of what is frozen and what preprocessing it expects."
+    },
+    4: {
+      lede: "A training run is one routine repeated: train an epoch, evaluate, step the learning-rate schedule, save the best model, stop early. The sanity checks in Chapter 7 catch most silent bugs before you spend hours on a run.",
+      chapters: [
+        { ch: 6, file: "06_training_loop.md", title: "The training loop", d: "One epoch, the full loop, optimizer, schedules, checkpoints.", tag: "Every project" },
+        { ch: 7, file: "07_training_health.md", title: "Training health and speed", d: "Sanity checks, reading loss curves, faster training.", tag: "Every project" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Write the loop</b> with <code>train()</code> and <code>eval()</code> set correctly, and <code>no_grad</code> for evaluation.",
+          "<b>Start with AdamW</b> and a learning rate around 1e-3 (1e-4 or lower for pretrained layers). The learning rate is the most important number you set.",
+          "<b>Save two files:</b> the best model by validation score, and a \"last\" checkpoint with optimizer state for resuming.",
+          "<b>Run the sanity checks first:</b> overfit one tiny batch, check the starting loss is near the value expected for your number of classes, look at gradient size.",
+          "<b>Read the curves:</b> they tell you whether you face overfitting, underfitting or an unstable learning rate. Speed things up last." ] },
+      ],
+      visual: { title: "One training run", html: '<div class="strip"><div class="box" style="--fill:var(--blue)">Train an epoch</div>' + arrow + '<div class="box" style="--fill:var(--green)">Evaluate<small>validation set</small></div>' + arrow + '<div class="box" style="--fill:var(--amber)">Step schedule</div>' + arrow + '<div class="box" style="--fill:var(--pink)">Save the best</div>' + arrow + '<div class="box" style="--fill:var(--purple)">Stop early?<small>restore the best</small></div></div>' },
+      warn: "Forgetting <code>model.eval()</code>, saving only the last epoch, and resuming without optimizer state are the three classic loop mistakes.",
+      done: "A run that overfits one small batch, trains on the full set, and saves a best model you can reload."
+    },
+    5: {
+      lede: "Accuracy alone can hide a model that fails on the class you care about. Evaluation tells you what the model really does, and how far to trust the number.",
+      chapters: [
+        { ch: 10, file: "10_evaluation.md", title: "Evaluation", d: "Metrics, confusion matrix, thresholds, calibration, error analysis, uncertainty.", tag: "Every project" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Evaluate on data the model never trained on</b> and never used to make decisions: the test set, used once at the end.",
+          "<b>Compare with a simple baseline</b> such as always predicting the most common class.",
+          "<b>Look per class:</b> confusion matrix, precision, recall and F1. Pick the metric that matches the cost of each kind of mistake.",
+          "<b>Choose a threshold on the validation set</b>, then report the test result at that threshold.",
+          "<b>Check calibration:</b> can you trust the model's confidence?",
+          "<b>Read the mistakes.</b> Very confident mistakes are often wrong labels in your data." ] },
+      ],
+      visual: { title: "Read the confusion matrix", html: '<div class="cm"><span></span><span class="h">Pred A</span><span class="h">Pred B</span><span class="h">Pred C</span><span class="r">True A</span><div class="c ok">correct</div><div class="c conf">confused</div><div class="c bad"></div><span class="r">True B</span><div class="c bad"></div><div class="c ok">correct</div><div class="c conf">confused</div><span class="r">True C</span><div class="c conf">confused</div><div class="c bad"></div><div class="c ok">correct</div></div><p class="cap">Illustration only. The diagonal is what the model gets right. Off-diagonal cells show which classes it mixes up.</p>' },
+      warn: "Tuning against the test set, or comparing tiny differences between runs, produces numbers that do not hold up. With a small test set, report the margin of error.",
+      done: "You can state the score, the baseline it beats, its weakest class, and the margin of error."
+    },
+    6: {
+      lede: "Diagnose first, then fix. The same symptom can mean different things, and a bug looks identical to underfitting.",
+      chapters: [
+        { ch: 8, file: "08_overfitting.md", title: "Beating overfitting", d: "Diagnose, then fixes in the order to try them, and what to do about underfitting.", tag: "Only if scores diverge" },
+        { ch: 12, file: "12_interpretability.md", title: "Interpretability", d: "Saliency, CAM and Grad-CAM heatmaps, and how to read them.", tag: "Only if a result looks too good" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Compare training and validation scores</b> and loss curves before changing anything.",
+          "<b>Fix overfitting</b> with the cheap, data-side fixes first (more or cleaner data, augmentation, a pretrained model), then regularisation.",
+          "<b>If both scores are low,</b> run the Chapter 7 sanity checks first: a bug looks the same as underfitting.",
+          "<b>Check the model looks at the right thing.</b> A heatmap that lights up the background means it has learned a shortcut, not the object.",
+          "<b>Keep the test set sealed</b> the whole time." ] },
+      ],
+      visual: { title: "Symptoms and what they usually mean", html: '<table class="dd"><tr><th>Training</th><th>Validation</th><th>Likely meaning</th></tr><tr><td>High</td><td>Much lower</td><td>Overfitting</td></tr><tr><td>Low</td><td>Low</td><td>Underfitting, or a bug</td></tr><tr><td>Lower than validation, persistently</td><td>Higher</td><td>Check for leakage, or an unusually easy validation set</td></tr></table>' },
+      warn: "A validation set that leaked into training makes everything look healthy. If validation beats training, look at the split before the model.",
+      done: "The gap between training and validation is understood and small enough, and the heatmaps show the model uses the object."
+    },
+    7: {
+      lede: "Tuning is the last step, not the first. It only pays off once a plain baseline works, and it needs an honest validation set.",
+      chapters: [
+        { ch: 9, file: "09_tuning.md", title: "Hyperparameter tuning", d: "What to tune and in what order, search space, objective, reading the results.", tag: "Only after a baseline works" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Tune in order of impact,</b> starting with the learning rate (searched on a log scale).",
+          "<b>Keep ranges sensible:</b> absurd ranges waste trials. Seed the search with your own best guess.",
+          "<b>Look at accuracy against size,</b> not accuracy alone, if the model must be small.",
+          "<b>Tune honestly:</b> with a small validation set the best trial may just be lucky. Retrain the top two or three candidates with a few seeds before choosing." ] },
+      ],
+      visual: { title: "Tuning comes last", html: '<div class="strip"><div class="box" style="--fill:var(--blue)">Working baseline</div>' + arrow + '<div class="box" style="--fill:var(--green)">Sanity checks pass</div>' + arrow + '<div class="box" style="--fill:var(--amber)">Search<small>few key settings</small></div>' + arrow + '<div class="box" style="--fill:var(--pink)">Confirm<small>several seeds</small></div></div>' },
+      warn: "Tuning a broken pipeline wastes every trial. If all trials score poorly, go back to the sanity checks.",
+      done: "A chosen configuration that stays good across several seeds, saved in your settings file."
+    },
+    8: {
+      lede: "Only when the model must run somewhere with limits (a phone, an edge device, a cost target) and be used by other software. Measure first, then take the cheapest step that meets the limit.",
+      chapters: [
+        { ch: 13, file: "13_optimization.md", title: "Shrinking models", d: "Measure size and speed, then quantization, pruning, distillation.", tag: "Only if size or speed limit" },
+        { ch: 14, file: "14_deployment.md", title: "Export and serving", d: "The bundle, the predictor, HTTP serving, ONNX export.", tag: "Only if shipping" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Measure size and latency</b> on the target hardware. Parameter count and speed are not the same thing.",
+          "<b>Climb the ladder, cheapest first,</b> and re-check accuracy on held-out data after every step.",
+          "<b>Bundle the model with its class names and preprocessing</b>, so serving code cannot drift from training.",
+          "<b>Export</b> (ONNX is a common target) and check the exported model gives the same outputs.",
+          "<b>Serve</b> it behind a simple API, and repeat the exact same resizing and normalising." ] },
+      ],
+      visual: { title: "From trained model to service", html: '<div class="strip"><div class="box" style="--fill:var(--blue)">Measure<small>size and speed</small></div>' + arrow + '<div class="box" style="--fill:var(--amber)">Shrink<small>if needed</small></div>' + arrow + '<div class="box" style="--fill:var(--green)">Bundle<small>model + preprocessing</small></div>' + arrow + '<div class="box" style="--fill:var(--purple)">Export<small>and compare outputs</small></div>' + arrow + '<div class="box" style="--fill:var(--pink)">Serve</div></div>' },
+      warn: "Pruning on its own usually does not shrink the file, and speed measured on your laptop says little about the target device.",
+      done: "A model file small and fast enough on the target hardware, whose outputs match the original."
+    },
+    9: {
+      lede: "A deployed model starts to degrade the day it launches, because the world changes. Tests protect you from your own changes, and monitoring protects you from the world's.",
+      chapters: [
+        { ch: 15, file: "15_testing_packaging.md", title: "Testing and packaging", d: "Model tests, data tests, packaging, automation.", tag: "Only if shipping" },
+        { ch: 16, file: "16_monitoring.md", title: "Monitoring and maintenance", d: "Why models degrade, what to log, drift checks, getting labels back, retraining.", tag: "Only if shipping" },
+      ],
+      sections: [
+        { title: "What you do", bullets: [
+          "<b>Write fast model tests</b> (output shape, can it overfit one batch) and <b>data tests</b>, and run them on every change.",
+          "<b>Package the code</b> so it installs with one command, and automate the build.",
+          "<b>Log</b> inputs, predicted classes and confidences in production.",
+          "<b>Watch for drift</b> by comparing live data against a reference on a few simple numbers.",
+          "<b>Sample real labels</b> regularly: accuracy on labelled samples is the only direct measure. Decide in advance when you will retrain." ] },
+      ],
+      visual: { title: "What to watch once it is live", html: '<table class="dd"><tr><th>Signal</th><th>Why it helps</th></tr><tr><td>Input statistics</td><td>Shows when new images look different from training images</td></tr><tr><td>Predicted classes and confidence</td><td>A shift in the mix is an early warning, with no labels needed</td></tr><tr><td>Accuracy on a labelled sample</td><td>The only direct measure of whether the model still works</td></tr></table>' },
+      warn: "With no labels in production you cannot compute accuracy directly. Indirect signals tell you something changed, not whether the model got worse.",
+      done: "Tests run automatically, and someone is alerted when inputs or predictions shift."
+    },
+  };
+
+  const deepdive = document.getElementById("deepdive");
+  const ddInner = document.getElementById("dd-inner");
+
+  function ddTemplate(step) {
+    const d = DEEP[step.num];
+    const g = GROUP_VARS[step.group];
+    const sv = `--accent:var(${g.accent});--fill:var(${g.fill});--tint:color-mix(in srgb, var(${g.accent}) 12%, white)`;
+    const chapterCards = d.chapters.map(c =>
+      `<a class="ch-card" href="${G}${c.file}" style="${sv}"><span class="n">Chapter ${c.ch}</span><span class="t">${c.title}</span><span class="d">${c.d}</span><span class="tagline">${c.tag}</span></a>`).join("");
+    const secs = d.sections.map((s, i) => `
+      <section class="dd-section" id="dd-s${i}">
+        <div class="dd-section-head"><span class="dd-section-num" style="${sv}">${i + 1}</span><span class="dd-section-title">${s.title}</span></div>
+        <ul class="dd-bullets">${s.bullets.map(b => "<li>" + b + "</li>").join("")}</ul>
+      </section>`).join("");
+    return `
+      <span class="dd-tag" style="${sv}">Step ${step.num} · ${GROUP_LABEL[step.group]}</span>
+      <h2>${step.icon} ${step.title}</h2>
+      <p class="dd-lede">${d.lede}</p>
+
+      <section class="dd-section">
+        <div class="dd-section-head"><span class="dd-section-num" style="${sv}">📖</span><span class="dd-section-title">Read these chapters</span></div>
+        <div class="ch-cards">${chapterCards}</div>
+      </section>
+
+      ${secs}
+
+      <section class="dd-section">
+        <div class="dd-section-head"><span class="dd-section-num" style="${sv}">🖼️</span><span class="dd-section-title">${d.visual.title}</span></div>
+        <div class="dd-visual">${d.visual.html}</div>
+      </section>
+
+      <div class="dd-callout warn" style="${sv}"><strong>Watch out:</strong> ${d.warn}</div>
+      <div class="dd-callout" style="${sv}"><strong>Done when:</strong> ${d.done}</div>
+    `;
+  }
+
+  function openDeepDive(num) {
+    const step = byNum(num);
+    if (!step) return;
+    ddInner.innerHTML = ddTemplate(step);
+    deepdive.hidden = false;
+    deepdive.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.getElementById("backBtn").focus();
+  }
+  function closeDeepDive() { deepdive.hidden = true; }
+
+  document.getElementById("map").addEventListener("click", (e) => {
+    const target = e.target.closest("[data-step]");
+    if (target) openDeepDive(Number(target.dataset.step));
+  });
+  document.getElementById("backBtn").addEventListener("click", closeDeepDive);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !deepdive.hidden) closeDeepDive(); });
+
+  /* ---------------- fit and zoom ---------------- */
+  const mapFit = document.getElementById("mapFit");
+  const mapEl = document.getElementById("map");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomResetBtn = document.getElementById("zoomResetBtn");
+  let naturalW = 0, naturalH = 0, fitScale = 1, zoomLevel = 1;
+  const ZOOM_MIN = 0.6, ZOOM_MAX = 2.2, ZOOM_STEP = 0.15;
+  function applyZoom() {
+    mapEl.style.transform = "scale(" + (fitScale * zoomLevel) + ")";
+    mapFit.style.height = Math.ceil(naturalH * fitScale) + "px";
+  }
+  function measureAndFit() {
+    mapEl.style.transform = "none";
+    naturalW = mapEl.scrollWidth;
+    naturalH = mapEl.scrollHeight;
+    const available = mapFit.clientWidth;
+    if (!naturalW || !available) return;
+    fitScale = available / naturalW;
+    applyZoom();
+  }
+  function setZoom(z) { zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)); applyZoom(); }
+  zoomInBtn.addEventListener("click", () => setZoom(zoomLevel + ZOOM_STEP));
+  zoomOutBtn.addEventListener("click", () => setZoom(zoomLevel - ZOOM_STEP));
+  zoomResetBtn.addEventListener("click", () => setZoom(1));
+  let fitTimer = null;
+  function scheduleFit() { clearTimeout(fitTimer); fitTimer = setTimeout(measureAndFit, 120); }
+  window.addEventListener("resize", scheduleFit);
+  window.addEventListener("load", measureAndFit);
+  measureAndFit();
+
+  /* ---------------- play the route ---------------- */
+  const flowDot = document.getElementById("flowDot");
+  const flowStatus = document.getElementById("flowStatus");
+  const playFlowBtn = document.getElementById("playFlowBtn");
+  function centerOf(el) { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function animateDot(from, to, duration, color) {
+    return new Promise((resolve) => {
+      flowDot.style.background = color;
+      flowDot.hidden = false;
+      flowDot.style.left = from.x + "px";
+      flowDot.style.top = from.y + "px";
+      const start = performance.now();
+      function frame(now) {
+        const k = Math.min(1, (now - start) / duration);
+        const e = easeInOutCubic(k);
+        flowDot.style.left = (from.x + (to.x - from.x) * e) + "px";
+        flowDot.style.top = (from.y + (to.y - from.y) * e) + "px";
+        if (k < 1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+  function pulse(el) { el.classList.remove("flow-lit"); void el.offsetWidth; el.classList.add("flow-lit"); }
+  function accentOf(el) { return getComputedStyle(el).getPropertyValue("--accent").trim() || "#1a1a1a"; }
+
+  let flowToken = 0;
+  async function playFlow() {
+    const token = ++flowToken;
+    checklistItems.querySelectorAll("input").forEach((i) => { i.checked = false; i.indeterminate = false; });
+    applyHighlight();
+    document.querySelectorAll(".flow-lit").forEach((el) => el.classList.remove("flow-lit"));
+    playFlowBtn.disabled = true;
+    flowDot.hidden = true;
+
+    const hub1 = document.querySelector('.hub[data-group="s1"]');
+    const hub2 = document.querySelector('.hub[data-group="s2"]');
+    const step = (n) => document.querySelector('[data-step="' + n + '"]');
+    const outputs = document.querySelectorAll(".outputcard");
+
+    const hops = [
+      { to: step(1), label: "Step 1. Set up. Folders, settings, seeds and logging, so every run can be repeated." },
+      { from: step(1), to: step(2), label: "Step 2. Data. Check quality, then split honestly before anything learns from the data." },
+      { from: step(2), to: step(3), label: "Step 3. Choose a model. Start from a pretrained network." },
+      { from: step(3), to: hub1, label: "A tidy project, clean split data and a starting model: ready to train." },
+      { from: hub1, to: step(4), label: "Step 4. Train. Run the sanity checks, then the full run, saving the best model." },
+      { from: step(4), to: step(5), label: "Step 5. Evaluate. Per-class results, mistakes and an honest score." },
+      { from: step(5), to: step(6), label: "Step 6. Improve. Fix overfitting, and check the model looks at the right thing." },
+      { from: step(6), to: step(7), label: "Step 7. Tune. Last, once a plain baseline works." },
+      { from: step(7), to: hub2, label: "The result is a model you can trust. Loop back to data or training whenever the checks say so." },
+      { from: hub2, to: step(8), label: "Step 8. Only if it goes to production: shrink, bundle, export and serve." },
+      { from: step(8), to: outputs[0], label: "This creates a deployable model." },
+      { from: hub2, to: step(9), label: "Step 9. Test every change, and monitor drift after launch." },
+      { from: step(9), to: outputs[1], label: "This creates a production system." },
+    ];
+
+    for (const hop of hops) {
+      if (token !== flowToken) return;
+      if (hop.from) await animateDot(centerOf(hop.from), centerOf(hop.to), 520, accentOf(hop.to));
+      if (token !== flowToken) return;
+      pulse(hop.to);
+      flowStatus.textContent = hop.label;
+      await new Promise((r) => setTimeout(r, hop.from ? 380 : 550));
+    }
+    if (token !== flowToken) return;
+    flowDot.hidden = true;
+    flowStatus.textContent = "Route complete. Click any step for details, or press play again.";
+    playFlowBtn.disabled = false;
+  }
+  playFlowBtn.addEventListener("click", playFlow);
+})();
+</script>
+</body>
+</html>
